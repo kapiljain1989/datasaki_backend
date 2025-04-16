@@ -1,0 +1,36 @@
+[project]
+name = "datasaki"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Kapil Jain",email = "kapiljain1989@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi (>=0.115.11,<0.116.0)",
+    "uvicorn (>=0.34.0,<0.35.0)",
+    "python-dotenv (>=1.0.1,<2.0.0)",
+    "authlib (>=1.5.1,<2.0.0)",
+    "sqlalchemy (>=2.0.38,<3.0.0)",
+    "passlib (>=1.7.4,<2.0.0)",
+    "alembic (>=1.14.1,<2.0.0)",
+    "psycopg2 (>=2.9.10,<3.0.0)",
+    "python-jose (>=3.4.0,<4.0.0)",
+    "python-multipart (>=0.0.20,<0.0.21)",
+    "httpx (>=0.28.1,<0.29.0)",
+    "psycopg2-binary (>=2.9.10,<3.0.0)",
+    "pydantic (>=2.10.6,<3.0.0)",
+    "oauthlib (>=3.2.2,<4.0.0)",
+    "requests (>=2.32.3,<3.0.0)",
+    "email-validator (>=2.2.0,<3.0.0)",
+    "bcrypt (>=4.3.0,<5.0.0)",
+    "pdfplumber (>=0.11.6,<0.12.0)",
+    "boto3 (>=1.37.34,<2.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
