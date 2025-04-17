@@ -5,6 +5,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.google_oauth import router as google_router
 from app.api.routes.connector import router as connector_router
 from app.api.routes.reader import router as reader_router
+from app.api.routers import llm_router, dataset_router
 from app.utils.logging import logger
 from app.core.api_logs import APILoggingMiddleware
 import os
@@ -18,6 +19,8 @@ app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(google_router, prefix="/auth", tags=["Google OAuth"])
 app.include_router(connector_router, prefix="/connectors", tags=["Connectors"])
 app.include_router(reader_router, prefix="/reader", tags=["Readers"])
+app.include_router(llm_router.router, prefix="/api/llm", tags=["LLM"])
+app.include_router(dataset_router.router, prefix="/api", tags=["Datasets"])
 
 app.add_middleware(APILoggingMiddleware)
 

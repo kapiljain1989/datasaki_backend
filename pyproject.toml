@@ -29,6 +29,13 @@ dependencies = [
     "boto3 (>=1.37.34,<2.0.0)",
     "pandas (>=2.2.3,<3.0.0)",
     "clickhouse-driver (>=0.2.9,<0.3.0)",
+    "langchain (>=0.1.0,<0.2.0)",
+    "langchain-core (>=0.1.0,<0.2.0)",
+    "langchain-community (>=0.0.10,<0.1.0)",
+    "langchain-openai (>=0.0.2,<0.1.0)",
+    "langchain-anthropic (>=0.1.0,<0.2.0)",
+    "langchain-google-genai (>=0.0.5,<0.1.0)",
+    "python-dotenv (>=1.0.0,<2.0.0)"
 ]
 
 
