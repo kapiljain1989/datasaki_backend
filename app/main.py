@@ -26,10 +26,30 @@ def root():
     logger.info("Welcome to datasaki")
     return {"message": "Welcome to datasaki"}
 
-if __name__ == "__main__":
+def run_server(host: str = "0.0.0.0", port: int = 8000, reload: bool = False):
+    """
+    Run the FastAPI server with optional auto-reload.
+    
+    Args:
+        host (str): Host to bind the server to
+        port (int): Port to bind the server to
+        reload (bool): Whether to enable auto-reload
+    """
     import uvicorn
     ssl_certfile = os.getenv("SSL_CERTFILE", "certs/ssl-cert.pem")
     ssl_keyfile = os.getenv("SSL_KEYFILE", "certs/ssl-key.pem")
-    uvicorn.run(app, host="0.0.0.0", port=8000, ssl_certfile=ssl_certfile, ssl_keyfile=ssl_keyfile)
+    
+    uvicorn.run(
+        "app.main:app",
+        host=host,
+        port=port,
+        reload=reload,
+        reload_dirs=["app"],
+        ssl_certfile=ssl_certfile,
+        ssl_keyfile=ssl_keyfile
+    )
+
+if __name__ == "__main__":
+    run_server(reload=True)  # Enable auto-reload by default when running directly
 
 
