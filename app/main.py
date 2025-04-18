@@ -1,58 +1,61 @@
 from fastapi import FastAPI
-from app.api.routes.ml import router as ml_router
-from app.api.routes.health import router as health_router
-from app.api.routes.auth import router as auth_router
-from app.api.routes.google_oauth import router as google_router
-from app.api.routes.connector import router as connector_router
-from app.api.routes.reader import router as reader_router
-from app.api.routers import llm_router, dataset_router
+from fastapi.middleware.cors import CORSMiddleware
+from app.middleware.rbac import RBACMiddleware
+from app.middleware.auth import AuthMiddleware
+from app.api.routes import auth, connector, dataset, llm, reader
+from app.core.config import settings
+from app.db.database import engine, Base
+from contextlib import asynccontextmanager
 from app.utils.logging import logger
 from app.core.api_logs import APILoggingMiddleware
-import os
 
-app = FastAPI(title="datasaki API", version="1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting up application...")
+    # Create database tables if they don't exist
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables created/verified")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down application...")
+    # Add any cleanup code here if needed
 
-# Include routers
-app.include_router(ml_router, prefix="/ml", tags=["Machine Learning"])
-app.include_router(health_router, prefix="/health", tags=["Health"])
-app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-app.include_router(google_router, prefix="/auth", tags=["Google OAuth"])
-app.include_router(connector_router, prefix="/connectors", tags=["Connectors"])
-app.include_router(reader_router, prefix="/reader", tags=["Readers"])
-app.include_router(llm_router.router, prefix="/api/llm", tags=["LLM"])
-app.include_router(dataset_router.router, prefix="/api", tags=["Datasets"])
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add authentication middleware
+app.add_middleware(AuthMiddleware)
+
+# Add RBAC middleware
+app.add_middleware(RBACMiddleware)
 
 app.add_middleware(APILoggingMiddleware)
 
+# Include routers with proper prefixes
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(connector.router, prefix="/api/v1/connectors", tags=["connectors"])
+app.include_router(dataset.router, prefix="/api/v1/datasets", tags=["datasets"])
+app.include_router(llm.router, prefix="/api/v1/llms", tags=["llms"])
+app.include_router(reader.router, prefix="/api/v1/readers", tags=["readers"])
+
 @app.get("/")
-def root():
+async def root():
     logger.info("Welcome to datasaki")
     return {"message": "Welcome to datasaki"}
-
-def run_server(host: str = "0.0.0.0", port: int = 8000, reload: bool = False):
-    """
-    Run the FastAPI server with optional auto-reload.
-    
-    Args:
-        host (str): Host to bind the server to
-        port (int): Port to bind the server to
-        reload (bool): Whether to enable auto-reload
-    """
-    import uvicorn
-    ssl_certfile = os.getenv("SSL_CERTFILE", "certs/ssl-cert.pem")
-    ssl_keyfile = os.getenv("SSL_KEYFILE", "certs/ssl-key.pem")
-    
-    uvicorn.run(
-        "app.main:app",
-        host=host,
-        port=port,
-        reload=reload,
-        reload_dirs=["app"],
-        ssl_certfile=ssl_certfile,
-        ssl_keyfile=ssl_keyfile
-    )
-
-if __name__ == "__main__":
-    run_server(reload=True)  # Enable auto-reload by default when running directly
 
 

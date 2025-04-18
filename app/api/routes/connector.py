@@ -1,131 +1,117 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, Depends, Header
+from typing import Dict, Any, List
 from sqlalchemy.orm import Session
 from app.services.connector_service import ConnectorService
-from app.schemas.connector import ConnectorConfig, ConnectorResponse, WriteRequest
-from app.db.database import get_db
-from app.dependencies import common_dependency
+from app.models.user import User
+from app.schemas.connector import (
+    ConnectorCreate,
+    ConnectorUpdate,
+    ConnectorResponse,
+    ConnectorListResponse
+)
+from app.dependencies import get_db, get_current_user, validate_token
 from app.utils.logging import logger
-from typing import List, Dict, Any
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(validate_token)])
 connector_service = ConnectorService()
 
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=ConnectorResponse)
+@router.post("/", response_model=ConnectorResponse)
 def create_connector(
-    config: ConnectorConfig,
+    connector: ConnectorCreate,
     db: Session = Depends(get_db),
-    dependency: dict = Depends(common_dependency)
+    current_user: User = Depends(get_current_user),
+    authorization: str = Header(...)
 ):
+    """Create a new connector for the current user."""
     try:
-        config.user_id = dependency["user_id"]
-        logger.info(f"API: Creating connector for user {config.user_id}")
-        return connector_service.create_connector(config, db)
+        logger.info(f"API: Creating connector for user {current_user.id}")
+        return connector_service.create_connector(connector, current_user.id, db)
     except Exception as e:
         logger.error(f"API: Failed to create connector - {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/", response_model=ConnectorListResponse)
+def list_connectors(
+    skip: int = 0,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    authorization: str = Header(...)
+):
+    """List connectors for the current user."""
+    try:
+        logger.info(f"API: Listing connectors for user {current_user.id}")
+        return connector_service.list_connectors(current_user.id, db, skip, limit)
+    except Exception as e:
+        logger.error(f"API: Failed to list connectors - {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/{connector_id}", response_model=ConnectorResponse)
 def get_connector(
     connector_id: str,
     db: Session = Depends(get_db),
-    dependency: dict = Depends(common_dependency)
+    current_user: User = Depends(get_current_user),
+    authorization: str = Header(...)
 ):
+    """Get a specific connector for the current user."""
     try:
-        user_id = dependency["user_id"]
-        logger.info(f"API: Getting connector {connector_id} for user {user_id}")
-        return connector_service.get_connector(connector_id, user_id, db)
+        logger.info(f"API: Getting connector {connector_id} for user {current_user.id}")
+        return connector_service.get_connector(connector_id, current_user.id, db)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         logger.error(f"API: Failed to get connector - {e}", exc_info=True)
         raise HTTPException(status_code=404, detail=str(e))
 
-@router.get("/", response_model=List[ConnectorResponse])
-def list_connectors(
-    connector_type: str = Query(None, description="Filter by connector type (source/destination)"),
+@router.put("/{connector_id}", response_model=ConnectorResponse)
+def update_connector(
+    connector_id: str,
+    connector_update: ConnectorUpdate,
     db: Session = Depends(get_db),
-    dependency: dict = Depends(common_dependency)
+    current_user: User = Depends(get_current_user),
+    authorization: str = Header(...)
 ):
+    """Update a connector for the current user."""
     try:
-        user_id = dependency["user_id"]
-        logger.info(f"API: Listing connectors for user {user_id}")
-        return connector_service.get_user_connectors(user_id, db, connector_type)
+        logger.info(f"API: Updating connector {connector_id} for user {current_user.id}")
+        return connector_service.update_connector(connector_id, connector_update, current_user.id, db)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
-        logger.error(f"API: Failed to list connectors - {e}", exc_info=True)
+        logger.error(f"API: Failed to update connector - {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.delete("/{connector_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{connector_id}", response_model=Dict[str, str])
 def delete_connector(
     connector_id: str,
     db: Session = Depends(get_db),
-    dependency: dict = Depends(common_dependency)
+    current_user: User = Depends(get_current_user),
+    authorization: str = Header(...)
 ):
+    """Delete a connector for the current user."""
     try:
-        user_id = dependency["user_id"]
-        logger.info(f"API: Deleting connector {connector_id} for user {user_id}")
-        connector_service.delete_connector(connector_id, user_id, db)
+        logger.info(f"API: Deleting connector {connector_id} for user {current_user.id}")
+        connector_service.delete_connector(connector_id, current_user.id, db)
+        return {"message": "Connector deleted successfully"}
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         logger.error(f"API: Failed to delete connector - {e}", exc_info=True)
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/{connector_id}/test", response_model=Dict[str, Any])
 def test_connection(
     connector_id: str,
     db: Session = Depends(get_db),
-    dependency: dict = Depends(common_dependency)
+    current_user: User = Depends(get_current_user),
+    authorization: str = Header(...)
 ):
-    """
-    Test the connection for a given connector.
-    
-    This endpoint will attempt to establish a connection using the connector's configuration
-    and return the test results.
-    """
+    """Test the connection for a given connector."""
     try:
-        user_id = dependency["user_id"]
-        logger.info(f"API: Testing connection for connector {connector_id}")
-        return connector_service.test_connection(connector_id, user_id, db)
+        logger.info(f"API: Testing connection for connector {connector_id} for user {current_user.id}")
+        return connector_service.test_connection(connector_id, current_user.id, db)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         logger.error(f"API: Failed to test connection - {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
-
-@router.post("/write", response_model=Dict[str, Any])
-def write_data(
-    request: WriteRequest,
-    db: Session = Depends(get_db),
-    dependency: dict = Depends(common_dependency)
-):
-    """
-    Write data to a destination connector.
-    
-    This endpoint allows writing data to a destination connector (e.g., ClickHouse).
-    If a schema is provided, it will create the table if it doesn't exist.
-    
-    Example request:
-    {
-        "connector_id": "your-connector-id",
-        "table_name": "your_table",
-        "data": [
-            {"column1": "value1", "column2": 123},
-            {"column1": "value2", "column2": 456}
-        ],
-        "schema": {
-            "column1": "String",
-            "column2": "Int32"
-        }
-    }
-    """
-    try:
-        user_id = dependency["user_id"]
-        logger.info(f"API: Writing data to connector {request.connector_id}")
-        return connector_service.write_data(request, user_id, db)
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"API: Failed to write data - {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))

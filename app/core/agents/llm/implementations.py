@@ -2,8 +2,8 @@ from typing import Any, Dict, List, Optional
 from langchain_core.prompts import PromptTemplate as LangChainPromptTemplate
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from app.core.agents.llm.interfaces import (
     LLMConfig, PromptTemplate, LLMResponse, LLMProvider, 
     PromptManager, LLMAgent
@@ -45,77 +45,47 @@ class LangChainPromptManager(PromptManager):
 
 class OpenAIProvider(LLMProvider):
     """Concrete implementation for OpenAI models."""
-    def __init__(self):
-        self._client = None
+    def __init__(self, api_key: str, model: str = "gpt-3.5-turbo"):
+        self.client = ChatOpenAI(
+            openai_api_key=api_key,
+            model=model
+        )
 
-    def _get_client(self, config: LLMConfig) -> BaseChatModel:
-        if not self._client:
-            self._client = ChatOpenAI(
-                model_name=config.model_name,
-                temperature=config.temperature,
-                max_tokens=config.max_tokens,
-                api_key=config.api_key or os.getenv("OPENAI_API_KEY"),
-                base_url=config.api_base
-            )
-        return self._client
+    def chat(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 1000
+    ) -> LLMResponse:
+        formatted_messages = []
+        for msg in messages:
+            if msg["role"] == "system":
+                formatted_messages.append(SystemMessage(content=msg["content"]))
+            elif msg["role"] == "user":
+                formatted_messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                formatted_messages.append(AIMessage(content=msg["content"]))
 
-    def generate(self, prompt: str, config: LLMConfig) -> LLMResponse:
-        try:
-            client = self._get_client(config)
-            response = client.invoke(prompt)
-            return LLMResponse(
-                content=response.content,
-                metadata={
-                    "model": config.model_name,
-                    "provider": "openai"
-                }
-            )
-        except Exception as e:
-            logger.error(f"Error generating response from OpenAI: {str(e)}")
-            raise
+        response = self.client.invoke(
+            formatted_messages,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+
+        return LLMResponse(
+            response=response.content,
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
+        )
 
     def get_available_models(self) -> List[str]:
         return [
             "gpt-4-turbo-preview",
             "gpt-4",
             "gpt-3.5-turbo"
-        ]
-
-class AnthropicProvider(LLMProvider):
-    """Concrete implementation for Anthropic models."""
-    def __init__(self):
-        self._client = None
-
-    def _get_client(self, config: LLMConfig) -> BaseChatModel:
-        if not self._client:
-            self._client = ChatAnthropic(
-                model_name=config.model_name,
-                temperature=config.temperature,
-                max_tokens=config.max_tokens,
-                api_key=config.api_key or os.getenv("ANTHROPIC_API_KEY")
-            )
-        return self._client
-
-    def generate(self, prompt: str, config: LLMConfig) -> LLMResponse:
-        try:
-            client = self._get_client(config)
-            response = client.invoke(prompt)
-            return LLMResponse(
-                content=response.content,
-                metadata={
-                    "model": config.model_name,
-                    "provider": "anthropic"
-                }
-            )
-        except Exception as e:
-            logger.error(f"Error generating response from Anthropic: {str(e)}")
-            raise
-
-    def get_available_models(self) -> List[str]:
-        return [
-            "claude-3-opus-20240229",
-            "claude-3-sonnet-20240229",
-            "claude-2.1"
         ]
 
 class GoogleGenAIProvider(LLMProvider):

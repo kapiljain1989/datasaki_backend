@@ -1,12 +1,16 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from app.core.agents.llm.factory import LLMFactory
 from app.core.agents.llm.interfaces import LLMConfig, LLMResponse
 from app.utils.logging import logger
+from sqlalchemy.orm import Session
+from app.models.llm import LLM
+from app.schemas.llm import LLMListResponse, LLMUpdate, LLMChatRequest, LLMChatResponse
 
 class LLMService:
     """Service class for managing LLM operations."""
     
-    def __init__(self):
+    def __init__(self, db: Session):
+        self.db = db
         self._agents: Dict[str, Any] = {}
         self._active_agent = None
 
@@ -69,4 +73,104 @@ class LLMService:
 
     def get_available_providers(self) -> Dict[str, Any]:
         """Get all available LLM providers."""
-        return LLMFactory.get_available_providers() 
+        return LLMFactory.get_available_providers()
+
+    def create_llm(
+        self,
+        user_id: int,
+        name: str,
+        provider: str,
+        model: str,
+        api_key: str,
+        config: dict
+    ) -> LLMResponse:
+        llm = LLM(
+            user_id=user_id,
+            name=name,
+            provider=provider,
+            model=model,
+            api_key=api_key,
+            config=config
+        )
+        self.db.add(llm)
+        self.db.commit()
+        self.db.refresh(llm)
+        return LLMResponse.from_orm(llm)
+
+    def list_llms(
+        self,
+        user_id: int,
+        skip: int = 0,
+        limit: int = 10
+    ) -> tuple[int, List[LLMResponse]]:
+        query = self.db.query(LLM).filter(LLM.user_id == user_id)
+        total = query.count()
+        llms = query.offset(skip).limit(limit).all()
+        return total, [LLMResponse.from_orm(llm) for llm in llms]
+
+    def get_llm(self, llm_id: int, user_id: int) -> LLMResponse:
+        llm = self.db.query(LLM).filter(
+            LLM.id == llm_id,
+            LLM.user_id == user_id
+        ).first()
+        if not llm:
+            raise ValueError("LLM not found")
+        return LLMResponse.from_orm(llm)
+
+    def update_llm(
+        self,
+        llm_id: int,
+        user_id: int,
+        name: Optional[str] = None,
+        api_key: Optional[str] = None,
+        config: Optional[dict] = None
+    ) -> LLMResponse:
+        llm = self.db.query(LLM).filter(
+            LLM.id == llm_id,
+            LLM.user_id == user_id
+        ).first()
+        if not llm:
+            raise ValueError("LLM not found")
+
+        if name is not None:
+            llm.name = name
+        if api_key is not None:
+            llm.api_key = api_key
+        if config is not None:
+            llm.config = config
+
+        self.db.commit()
+        self.db.refresh(llm)
+        return LLMResponse.from_orm(llm)
+
+    def delete_llm(self, llm_id: int, user_id: int) -> None:
+        llm = self.db.query(LLM).filter(
+            LLM.id == llm_id,
+            LLM.user_id == user_id
+        ).first()
+        if not llm:
+            raise ValueError("LLM not found")
+        self.db.delete(llm)
+        self.db.commit()
+
+    def chat_with_llm(
+        self,
+        llm_id: int,
+        user_id: int,
+        messages: List[dict],
+        temperature: float = 0.7,
+        max_tokens: int = 1000
+    ) -> LLMChatResponse:
+        llm = self.db.query(LLM).filter(
+            LLM.id == llm_id,
+            LLM.user_id == user_id
+        ).first()
+        if not llm:
+            raise ValueError("LLM not found")
+
+        # TODO: Implement actual LLM chat functionality
+        # This is a placeholder that should be implemented based on your requirements
+        return LLMChatResponse(
+            response="Chat functionality to be implemented",
+            usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        ) 

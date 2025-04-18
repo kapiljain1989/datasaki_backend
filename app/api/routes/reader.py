@@ -1,28 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from app.core.agents.reader_agent import ReaderAgent
-from app.dependencies import get_db, common_dependency
+from app.dependencies import get_db, get_current_user, validate_token
+from app.models.user import User
 from app.services.connector_service import ConnectorService
 from app.utils.logging import logger
 import os
 from typing import List
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(validate_token)])
 
 @router.post("/read-from-connector/{connector_id}")
 def read_from_connector(
     connector_id: str,
     selected_files: list[str] = None,
-    dependency: dict = Depends(common_dependency),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    authorization: str = Header(...)
 ):
-    user_id = dependency["user_id"]
-    logger.info(f"ReaderAgent triggered by user_id={user_id} for connector_id={connector_id} with files={selected_files}")
+    logger.info(f"ReaderAgent triggered by user_id={current_user.id} for connector_id={connector_id} with files={selected_files}")
 
     try:
-        connector = ConnectorService().get_connector(connector_id, user_id, db)
+        connector = ConnectorService().get_connector(connector_id, current_user.id, db)
         if not connector:
-            logger.warning(f"Connector {connector_id} not found for user {user_id}")
+            logger.warning(f"Connector {connector_id} not found for user {current_user.id}")
             raise HTTPException(status_code=404, detail="Connector not found")
 
         if not connector["file_path"] and not selected_files:
@@ -37,7 +38,7 @@ def read_from_connector(
                 results.append({"file": file, "data_preview": result[:5]})
         else:
             # If no files provided, read all files in directory
-            files = list_files(connector_id, dependency, db)
+            files = list_files(connector_id, current_user, db)
             for file in files:
                 result = reader_agent.read_data(connector_id, file)
                 results.append({"file": file, "data_preview": result[:5]})
@@ -52,16 +53,16 @@ def read_from_connector(
 @router.get("/list-files/{connector_id}")
 def list_files(
     connector_id: str,
-    dependency: dict = Depends(common_dependency),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    authorization: str = Header(...)
 ) -> List[str]:
-    user_id = dependency["user_id"]
-    logger.info(f"Listing files for connector_id={connector_id} by user_id={user_id}")
+    logger.info(f"Listing files for connector_id={connector_id} by user_id={current_user.id}")
 
     try:
-        connector = ConnectorService().get_connector(connector_id, user_id, db)
+        connector = ConnectorService().get_connector(connector_id, current_user.id, db)
         if not connector:
-            logger.warning(f"Connector {connector_id} not found for user {user_id}")
+            logger.warning(f"Connector {connector_id} not found for user {current_user.id}")
             raise HTTPException(status_code=404, detail="Connector not found")
 
         if not connector["file_path"]:
